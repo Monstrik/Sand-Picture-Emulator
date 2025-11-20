@@ -116,8 +116,10 @@
           </div>
           <div class="buttons">
             <button id="reset">Reset</button>
-            <button id="randomize">Randomize</button>
             <button id="pause">Pause</button>
+          </div>
+          <div class="buttons">
+            <button id="randomize">Randomize</button>
           </div>
           <div class="legend">Tip: Drag on the canvas to paint. 1=Sand A, 4=Sand B, 2=Water, 3=Air.</div>
         </div>
@@ -170,6 +172,54 @@
   densityLevelsRange.addEventListener('input', () => { densVal.textContent = densityLevelsRange.value; });
   if (sandColorInputA) sandColorInputA.addEventListener('input', () => { updatePaletteFromPicker(); });
   if (sandColorInputB) sandColorInputB.addEventListener('input', () => { updatePaletteFromPicker(); });
+
+  function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+  function randStep(min, max, step) {
+    const steps = Math.floor((max - min) / step);
+    return (min + step * randInt(0, steps));
+  }
+  function randomHexColor() {
+    const r = randInt(0,255).toString(16).padStart(2,'0');
+    const g = randInt(0,255).toString(16).padStart(2,'0');
+    const b = randInt(0,255).toString(16).padStart(2,'0');
+    return `#${r}${g}${b}`;
+  }
+
+  function randomizeSettings() {
+    // Randomize composition ensuring sum = 100
+    const s = randInt(0, 100);
+    const w = randInt(0, 100 - s);
+    const a = 100 - s - w;
+    sandRange.value = String(s);
+    waterRange.value = String(w);
+    airRange.value = String(a);
+    sandVal.textContent = sandRange.value;
+    waterVal.textContent = waterRange.value;
+    airVal.textContent = airRange.value;
+
+    // Randomize physics params
+    const visc = randStep(0, 1, 0.05).toFixed(2);
+    const st = randStep(0, 1, 0.05).toFixed(2);
+    const tilt = String(randInt(-45, 45));
+    const turb = randStep(0, 1, 0.05).toFixed(2);
+    const dens = String(randInt(1, 5));
+
+    viscosityRange.value = visc;
+    surfaceTensionRange.value = st;
+    tiltRange.value = tilt;
+    turbulenceRange.value = turb;
+    densityLevelsRange.value = dens;
+    viscVal.textContent = viscosityRange.value;
+    stVal.textContent = surfaceTensionRange.value;
+    tiltVal.textContent = tiltRange.value;
+    turbVal.textContent = turbulenceRange.value;
+    densVal.textContent = densityLevelsRange.value;
+
+    // Randomize sand colors
+    if (sandColorInputA) sandColorInputA.value = randomHexColor();
+    if (sandColorInputB) sandColorInputB.value = randomHexColor();
+    updatePaletteFromPicker();
+  }
 
   function updatePercents(changed) {
     // Normalize so sand+water+air = 100
@@ -579,7 +629,11 @@
 
   // Buttons
   resetBtn.addEventListener('click', () => { resizeCanvas(); initWorld(false); });
-  randomizeBtn.addEventListener('click', () => { resizeCanvas(); initWorld(true); });
+  randomizeBtn.addEventListener('click', () => {
+    randomizeSettings();
+    resizeCanvas();
+    initWorld(true);
+  });
   pauseBtn.addEventListener('click', togglePause);
   // Note: Flip features removed per request
 
