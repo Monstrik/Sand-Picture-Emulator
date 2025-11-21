@@ -76,12 +76,15 @@
             <label>Sand B color <span><input id="sandColorB" type="color" value="#9a7745"/></span></label>
           </div>
           <div class="control">
-            <label>Sand % <span id="sandVal">95</span></label>
-            <input id="sand" type="range" min="0" max="100" value="95"/>
+            <label>Liquid % <span id="liquidVal">60</span></label>
           </div>
           <div class="control">
-            <label>Air % <span id="airVal">5</span></label>
-            <input id="air" type="range" min="0" max="100" value="5"/>
+            <label>Air % <span id="airVal">15</span></label>
+            <input id="air" type="range" min="10" max="20" value="15"/>
+          </div>
+          <div class="control">
+            <label>Sand % <span id="sandVal">25</span></label>
+            <input id="sand" type="range" min="0" max="100" value="25" disabled/>
           </div>
           <div class="control">
             <label>Viscosity <span id="viscVal">0.50</span></label>
@@ -136,6 +139,7 @@
   const canvas = $('sand-canvas');
   const sandRange = $('sand');
   const airRange = $('air');
+  const liquidVal = $('liquidVal');
   const sandColorInputA = $('sandColorA');
   const sandColorInputB = $('sandColorB');
   const viscosityRange = $('viscosity');
@@ -152,7 +156,7 @@
   const speedRange = $('speed');
 
   const sandVal = $('sandVal');
-  // water removed
+  // Liquid percentage is fixed at 60 and displayed via liquidVal
   const airVal = $('airVal');
   const speedVal = $('speedVal');
   const viscVal = $('viscVal');
@@ -161,6 +165,7 @@
   const turbVal = $('turbVal');
   const densVal = $('densVal');
 
+  // Sand is derived from liquid(60%) and air (10–20%), so only air is adjustable
   sandRange.addEventListener('input', () => updatePercents('sand'));
   airRange.addEventListener('input', () => updatePercents('air'));
   speedRange.addEventListener('input', () => { speedVal.textContent = speedRange.value + 'x'; });
@@ -185,11 +190,13 @@
   }
 
   function randomizeSettings() {
-    // Randomize composition for sand and air only (sum = 100)
-    const s = randInt(0, 100);
-    const a = 100 - s;
-    sandRange.value = String(s);
+    // Liquid is fixed at 60%; Air in [10..20]; Sand = 100 - (liquid + air)
+    const liquid = 60;
+    const a = randInt(10, 20);
+    const s = Math.max(0, 100 - (liquid + a));
     airRange.value = String(a);
+    sandRange.value = String(s);
+    if (liquidVal) liquidVal.textContent = String(liquid);
     sandVal.textContent = sandRange.value;
     airVal.textContent = airRange.value;
 
@@ -218,26 +225,15 @@
   }
 
   function updatePercents(changed) {
-    // Normalize so sand + air = 100
-    const vals = {
-      sand: parseInt(sandRange.value, 10),
-      air: parseInt(airRange.value, 10),
-    };
-    let total = vals.sand + vals.air;
-    if (total !== 100) {
-      if (changed === 'sand') {
-        vals.air = Math.max(0, Math.min(100, 100 - vals.sand));
-      } else if (changed === 'air') {
-        vals.sand = Math.max(0, Math.min(100, 100 - vals.air));
-      } else {
-        // fallback distribute evenly
-        const diff = 100 - total;
-        vals.sand = Math.max(0, Math.min(100, vals.sand + Math.round(diff / 2)));
-        vals.air = Math.max(0, Math.min(100, 100 - vals.sand));
-      }
-    }
-    sandRange.value = String(vals.sand);
-    airRange.value = String(vals.air);
+    // Composition: Liquid fixed at 60; Air constrained to [10..20]; Sand = 40 - Air
+    const liquid = 60;
+    let air = parseInt(airRange.value, 10);
+    if (isNaN(air)) air = 15;
+    air = Math.max(10, Math.min(20, air));
+    const sand = Math.max(0, 100 - (liquid + air)); // should be 40 - air
+    sandRange.value = String(sand);
+    airRange.value = String(air);
+    if (liquidVal) liquidVal.textContent = String(liquid);
     sandVal.textContent = sandRange.value;
     airVal.textContent = airRange.value;
   }
@@ -307,8 +303,9 @@
     params.tiltDeg = parseFloat(tiltRange.value || '0') || 0;
     params.turbulence = parseFloat(turbulenceRange.value || '0.25') || 0;
     params.densityLevels = Math.max(1, Math.min(5, parseInt(densityLevelsRange.value || '3', 10)));
-    const pSand = parseInt(sandRange.value, 10) / 100;
-    const pAir = Math.max(0, 1 - pSand);
+    const pLiquid = 0.60;
+    const pAir = Math.max(0, Math.min(1, parseInt(airRange.value, 10) / 100));
+    const pSand = Math.max(0, 1 - (pLiquid + pAir));
 
     const rnd = Math.random;
     for (let y = 0; y < H; y++) {
@@ -316,8 +313,9 @@
         let r = rnd();
         if (randomize) r = rnd();
         let t;
-        if (r < pSand) t = (Math.random() < 0.5 ? TYPE.SAND_A : TYPE.SAND_B);
-        else t = TYPE.AIR;
+        if (r < pLiquid) t = TYPE.WATER;
+        else if (r < pLiquid + pAir) t = TYPE.AIR;
+        else t = (Math.random() < 0.5 ? TYPE.SAND_A : TYPE.SAND_B);
         let color = 0;
         let density = 0;
         if (isSandType(t)) {
@@ -370,7 +368,7 @@
               const d = idx(x, ny);
               const below = grid[d];
               const bt = getType(below);
-              if (bt === TYPE.AIR) {
+              if (bt === TYPE.AIR || bt === TYPE.WATER) {
                 // Bubble resistance: if the air below belongs to a larger pocket,
                 // strongly reduce the chance for sand to enter it.
                 // Count AIR in Moore neighborhood around target (x, y+1)
@@ -385,12 +383,16 @@
                 }
                 // Scale factor drops with more surrounding air (coalesced bubbles resist intrusion)
                 const st = params.surfaceTension;
-                const resist = Math.max(0.1, 1 - (0.08 + 0.10 * st) * airN);
-                const chance = Math.max(0, Math.min(1, fallIntoAirChance * resist));
+                const resistAir = Math.max(0.1, 1 - (0.08 + 0.10 * st) * airN);
+                // Sand moves into water more readily than into air
+                const baseWater = Math.max(0.12, (isA ? 0.18 : 0.14) * (1 - 0.6 * params.viscosity) * (0.7 + 0.6 * heaviness));
+                const chance = bt === TYPE.AIR
+                  ? Math.max(0, Math.min(1, fallIntoAirChance * resistAir))
+                  : Math.max(0, Math.min(1, baseWater));
                 if (Math.random() < chance) {
                   // swap with below
                   gridNext[d] = makeCell(t, color, dens);
-                  gridNext[i] = makeCell(TYPE.AIR, 0, 0);
+                  gridNext[i] = makeCell(bt === TYPE.AIR ? TYPE.AIR : TYPE.WATER, 0, 0);
                   continue;
                 }
               }
@@ -408,7 +410,7 @@
               const j = idx(nx, ny);
               const c2 = grid[j];
               const t2 = getType(c2);
-              if (t2 === TYPE.AIR) {
+              if (t2 === TYPE.AIR || t2 === TYPE.WATER) {
                 // Bubble resistance also applies to diagonal entries
                 let airN = 0;
                 for (let oy = -1; oy <= 1; oy++) {
@@ -422,10 +424,13 @@
                 const base = Math.max(0.01, (isA ? 0.09 : 0.05) * viscScale * (0.55 + 0.6 * heaviness));
                 const st = params.surfaceTension;
                 const resist = Math.max(0.1, 1 - (0.08 + 0.10 * st) * airN);
-                const chance = Math.max(0, Math.min(1, base * resist));
+                const baseWater = Math.max(0.06, (isA ? 0.12 : 0.09) * (1 - 0.6 * params.viscosity) * (0.6 + 0.6 * heaviness));
+                const chance = t2 === TYPE.AIR
+                  ? Math.max(0, Math.min(1, base * resist))
+                  : Math.max(0, Math.min(1, baseWater));
                 if (Math.random() < chance) {
                   gridNext[j] = makeCell(t, color, dens);
-                  gridNext[i] = makeCell(TYPE.AIR, 0, 0);
+                  gridNext[i] = makeCell(t2 === TYPE.AIR ? TYPE.AIR : TYPE.WATER, 0, 0);
                   break;
                 }
               }
@@ -458,8 +463,9 @@
               if (ny2 >= 0 && ny2 < H && getType(grid[idx(x, ny2)]) === TYPE.AIR) nearAirAbove++;
               if (x - 1 >= 0 && getType(grid[idx(x - 1, ny)]) === TYPE.AIR) nearAirAbove++;
               if (x + 1 < W && getType(grid[idx(x + 1, ny)]) === TYPE.AIR) nearAirAbove++;
-              const riseBase = 0.03 + 0.02 * turb + 0.03 * st + 0.02 * nearAirAbove;
-              if (isSandType(at) && Math.random() < riseBase) {
+              const riseBaseSand = 0.03 + 0.02 * turb + 0.03 * st + 0.02 * nearAirAbove;
+              const riseBaseWater = 0.09 + 0.03 * turb + 0.02 * st + 0.02 * nearAirAbove; // bubbles rise faster in water
+              if ((isSandType(at) && Math.random() < riseBaseSand) || (at === TYPE.WATER && Math.random() < riseBaseWater)) {
                 // bubble rises through sand
                 gridNext[u] = makeCell(TYPE.AIR, 0, 0);
                 gridNext[i] = makeCell(at, getColor(above), getDensity(above));
@@ -476,12 +482,12 @@
               const j = idx(nx, ny);
               const c2 = grid[j];
               const t2 = getType(c2);
-              if (isSandType(t2)) {
+              if (isSandType(t2) || t2 === TYPE.WATER) {
                 // If there is air beyond the sand in the direction of travel, try to swap
                 const aheadY = ny + upDir;
                 const hasAirAhead = (aheadY >= 0 && aheadY < H && getType(grid[idx(nx, aheadY)]) === TYPE.AIR)
                                    || (nx + dx >= 0 && nx + dx < W && getType(grid[idx(nx + dx, ny)]) === TYPE.AIR);
-                const chance = 0.02 + 0.02 * st + 0.02 * turb + (hasAirAhead ? 0.03 : 0);
+                const chance = (t2 === TYPE.WATER ? 0.05 : 0.02) + 0.02 * st + 0.02 * turb + (hasAirAhead ? 0.03 : 0);
                 if (hasAirAhead && Math.random() < chance) {
                   gridNext[j] = makeCell(TYPE.AIR, 0, 0);
                   gridNext[i] = makeCell(t2, getColor(c2), getDensity(c2));
@@ -497,8 +503,8 @@
             const j = idx(sx, y);
             const tSide = getType(grid[j]);
             const ahead = sx + dx;
-            if (isSandType(tSide) && ahead >= 0 && ahead < W && getType(grid[idx(ahead, y)]) === TYPE.AIR) {
-              const chance = 0.015 + 0.015 * st + 0.02 * turb;
+            if ((isSandType(tSide) || tSide === TYPE.WATER) && ahead >= 0 && ahead < W && getType(grid[idx(ahead, y)]) === TYPE.AIR) {
+              const chance = (tSide === TYPE.WATER ? 0.03 : 0.015) + 0.015 * st + 0.02 * turb;
               if (Math.random() < chance) {
                 // Swap with side sand to drift toward the air pocket
                 gridNext[j] = makeCell(TYPE.AIR, 0, 0);
@@ -523,6 +529,9 @@
       if (t === TYPE.AIR) {
         // Render air as dark background, not bright red
         data[p++] = 17; data[p++] = 17; data[p++] = 17; data[p++] = 255;
+      } else if (t === TYPE.WATER) {
+        // Render liquid as cool blue
+        data[p++] = 58; data[p++] = 112; data[p++] = 168; data[p++] = 255;
       } else if (t === TYPE.SAND_A) {
         const c = paletteA[0] || [200, 180, 90];
         // Slight darkening with density to hint heavier grains
@@ -626,7 +635,7 @@
   }
 
   // Initial
-  updatePercents('sand');
+  updatePercents('air');
   viscVal.textContent = Number(viscosityRange.value).toFixed(2);
   stVal.textContent = Number(surfaceTensionRange.value).toFixed(2);
   tiltVal.textContent = tiltRange.value;
