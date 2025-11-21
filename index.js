@@ -76,12 +76,12 @@
             <label>Sand B color <span><input id="sandColorB" type="color" value="#9a7745"/></span></label>
           </div>
           <div class="control">
-            <label>Sand % <span id="sandVal">60</span></label>
-            <input id="sand" type="range" min="0" max="100" value="60"/>
+            <label>Sand % <span id="sandVal">95</span></label>
+            <input id="sand" type="range" min="0" max="100" value="95"/>
           </div>
           <div class="control">
-            <label>Air % <span id="airVal">40</span></label>
-            <input id="air" type="range" min="0" max="100" value="40"/>
+            <label>Air % <span id="airVal">5</span></label>
+            <input id="air" type="range" min="0" max="100" value="5"/>
           </div>
           <div class="control">
             <label>Viscosity <span id="viscVal">0.50</span></label>
@@ -521,8 +521,8 @@
       const cell = grid[i];
       const t = getType(cell);
       if (t === TYPE.AIR) {
-        // TEST: Color air bubbles bright red for maximum visibility during testing
-        data[p++] = 255; data[p++] = 0; data[p++] = 0; data[p++] = 255;
+        // Render air as dark background, not bright red
+        data[p++] = 17; data[p++] = 17; data[p++] = 17; data[p++] = 255;
       } else if (t === TYPE.SAND_A) {
         const c = paletteA[0] || [200, 180, 90];
         // Slight darkening with density to hint heavier grains
