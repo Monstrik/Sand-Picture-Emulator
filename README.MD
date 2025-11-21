@@ -1,13 +1,13 @@
 
 # Sand Picture Emulator
 
-An interactive browser-based simulation inspired by kinetic sand art frames. It simulates grains of sand, water, and air in a 2D grid and renders the evolving picture on an HTML canvas. You can tweak physical-like parameters, paint materials, and watch dunes form as the world settles.
+An interactive browser-based simulation inspired by kinetic sand art frames. It simulates grains of sand and air in a 2D grid and renders the evolving picture on an HTML canvas. You can tweak physical-like parameters, paint materials, and watch dunes form as the world settles.
 
 This project is self‑contained: just open index.html in a modern browser, or run it with npm to start a local server that opens your browser automatically.
 
 ## Features
 
-- Sand, water, and air cellular simulation with falling and sliding behavior
+- Sand and air cellular simulation with falling and sliding behavior
 - Two distinct sand types (A and B) with adjustable colors
 - Adjustable world size and simulation speed
 - Physical-like parameters: viscosity, surface tension, tilt, turbulence
@@ -33,11 +33,11 @@ No build step or dependencies are required.
 - Sand A color / Sand B color
   - Pick base colors for the two sand types. They fall and flow differently, producing layered patterns.
 
-- Sand %, Water %, Air %
-  - Initial composition sliders. They are normalized to 100% automatically when you change any one of them.
+- Sand %, Air %
+  - Initial composition sliders. They are normalized to 100% automatically when you change either of them.
 
 - Viscosity
-  - Higher values make water/sand movements more resistant and slower to flow sideways.
+  - Higher values make sand movements more resistant and slower to flow sideways.
 
 - Surface tension
   - Encourages clumping and sticking; higher values favor compact piles and reduce dispersion.
@@ -67,21 +67,21 @@ No build step or dependencies are required.
 - Painting: Click and drag on the canvas to paint the selected material.
 - Shortcuts (while the page is focused):
   - 1 = Paint Sand A
-  - 2 = Paint Water
+  - 2 = Paint Air
   - 3 = Paint Air
   - 4 = Paint Sand B
   - P = Pause/Resume
 
-Brush size is smaller for sand to give a finer grain look, and larger for water/air to quickly sculpt the scene.
+Brush size is smaller for sand to give a finer grain look, and larger for air to quickly sculpt the scene.
 
 ## How it works (brief)
 
 The simulation runs on an integer grid updated from bottom to top each step. Each cell stores:
-- Type: Air, Sand A, Water, Sand B
+- Type: Air, Sand A, Sand B
 - Color index (for extensibility; currently base colors)
 - Density level (heavier sand tends to settle faster)
 
-Rendering writes pixels directly with ImageData for performance. Air and water are rendered as a neutral gray background so blue speckles don’t distract; sand colors are slightly darkened by density to suggest weight.
+Rendering writes pixels directly with ImageData for performance. Air is rendered as a neutral light gray background; sand colors are slightly darkened by density to suggest weight.
 
 ## Performance Tips
 

@@ -77,10 +77,6 @@
             <input id="sand" type="range" min="0" max="100" value="60"/>
           </div>
           <div class="control">
-            <label>Water % <span id="waterVal">0</span></label>
-            <input id="water" type="range" min="0" max="100" value="0"/>
-          </div>
-          <div class="control">
             <label>Air % <span id="airVal">40</span></label>
             <input id="air" type="range" min="0" max="100" value="40"/>
           </div>
@@ -121,7 +117,7 @@
           <div class="buttons">
             <button id="randomize">Randomize</button>
           </div>
-          <div class="legend">Tip: Drag on the canvas to paint. 1=Sand A, 4=Sand B, 2=Water, 3=Air.</div>
+          <div class="legend">Tip: Drag on the canvas to paint. 1=Sand A, 4=Sand B, 2/3=Air.</div>
         </div>
         <div id="canvasWrap">
           <canvas id="sand-canvas"></canvas>
@@ -135,7 +131,6 @@
 
   const canvas = $('sand-canvas');
   const sandRange = $('sand');
-  const waterRange = $('water');
   const airRange = $('air');
   const sandColorInputA = $('sandColorA');
   const sandColorInputB = $('sandColorB');
@@ -152,7 +147,7 @@
   const speedRange = $('speed');
 
   const sandVal = $('sandVal');
-  const waterVal = $('waterVal');
+  // water removed
   const airVal = $('airVal');
   const speedVal = $('speedVal');
   const viscVal = $('viscVal');
@@ -162,7 +157,6 @@
   const densVal = $('densVal');
 
   sandRange.addEventListener('input', () => updatePercents('sand'));
-  waterRange.addEventListener('input', () => updatePercents('water'));
   airRange.addEventListener('input', () => updatePercents('air'));
   speedRange.addEventListener('input', () => { speedVal.textContent = speedRange.value + 'x'; });
   viscosityRange.addEventListener('input', () => { viscVal.textContent = Number(viscosityRange.value).toFixed(2); });
@@ -186,15 +180,12 @@
   }
 
   function randomizeSettings() {
-    // Randomize composition ensuring sum = 100
+    // Randomize composition for sand and air only (sum = 100)
     const s = randInt(0, 100);
-    const w = randInt(0, 100 - s);
-    const a = 100 - s - w;
+    const a = 100 - s;
     sandRange.value = String(s);
-    waterRange.value = String(w);
     airRange.value = String(a);
     sandVal.textContent = sandRange.value;
-    waterVal.textContent = waterRange.value;
     airVal.textContent = airRange.value;
 
     // Randomize physics params
@@ -222,32 +213,27 @@
   }
 
   function updatePercents(changed) {
-    // Normalize so sand+water+air = 100
+    // Normalize so sand + air = 100
     const vals = {
       sand: parseInt(sandRange.value, 10),
-      water: parseInt(waterRange.value, 10),
       air: parseInt(airRange.value, 10),
     };
-    const total = vals.sand + vals.water + vals.air;
-    if (total === 100) {
-      // ok
-    } else if (total === 0) {
-      vals.air = 100;
-    } else {
-      const diff = 100 - total;
-      // distribute diff among the other two sliders
-      const keys = ['sand', 'water', 'air'].filter(k => k !== changed);
-      for (let i = 0; i < keys.length; i++) {
-        const k = keys[i];
-        const allot = i === keys.length - 1 ? diff : Math.round(diff / keys.length);
-        vals[k] = Math.max(0, Math.min(100, vals[k] + allot));
+    let total = vals.sand + vals.air;
+    if (total !== 100) {
+      if (changed === 'sand') {
+        vals.air = Math.max(0, Math.min(100, 100 - vals.sand));
+      } else if (changed === 'air') {
+        vals.sand = Math.max(0, Math.min(100, 100 - vals.air));
+      } else {
+        // fallback distribute evenly
+        const diff = 100 - total;
+        vals.sand = Math.max(0, Math.min(100, vals.sand + Math.round(diff / 2)));
+        vals.air = Math.max(0, Math.min(100, 100 - vals.sand));
       }
     }
     sandRange.value = String(vals.sand);
-    waterRange.value = String(vals.water);
     airRange.value = String(vals.air);
     sandVal.textContent = sandRange.value;
-    waterVal.textContent = waterRange.value;
     airVal.textContent = airRange.value;
   }
 
@@ -315,8 +301,7 @@
     params.turbulence = parseFloat(turbulenceRange.value || '0.25') || 0;
     params.densityLevels = Math.max(1, Math.min(5, parseInt(densityLevelsRange.value || '3', 10)));
     const pSand = parseInt(sandRange.value, 10) / 100;
-    const pWater = parseInt(waterRange.value, 10) / 100;
-    const pAir = Math.max(0, 1 - pSand - pWater);
+    const pAir = Math.max(0, 1 - pSand);
 
     const rnd = Math.random;
     for (let y = 0; y < H; y++) {
@@ -325,7 +310,6 @@
         if (randomize) r = rnd();
         let t;
         if (r < pSand) t = (Math.random() < 0.5 ? TYPE.SAND_A : TYPE.SAND_B);
-        else if (r < pSand + pWater) t = TYPE.WATER;
         else t = TYPE.AIR;
         let color = 0;
         let density = 0;
@@ -371,12 +355,7 @@
             const d = idx(x, y + 1);
             const below = grid[d];
             const bt = getType(below);
-            if (bt === TYPE.WATER) {
-              // sand always sinks through water
-              gridNext[d] = makeCell(t, color, dens);
-              gridNext[i] = makeCell(TYPE.WATER, getColor(below), 0);
-              continue;
-            } else if (bt === TYPE.AIR && Math.random() < fallIntoAirChance) {
+            if (bt === TYPE.AIR && Math.random() < fallIntoAirChance) {
               // swap with below
               gridNext[d] = makeCell(t, color, dens);
               gridNext[i] = makeCell(TYPE.AIR, 0, 0);
@@ -395,11 +374,7 @@
               const j = idx(nx, ny);
               const c2 = grid[j];
               const t2 = getType(c2);
-              if (t2 === TYPE.WATER) {
-                gridNext[j] = makeCell(t, color, dens);
-                gridNext[i] = makeCell(TYPE.WATER, getColor(c2), 0);
-                break;
-              } else if (t2 === TYPE.AIR && Math.random() < Math.max(0.01, (isA ? 0.09 : 0.05) * viscScale * (0.55 + 0.6 * heaviness))) {
+              if (t2 === TYPE.AIR && Math.random() < Math.max(0.01, (isA ? 0.09 : 0.05) * viscScale * (0.55 + 0.6 * heaviness))) {
                 gridNext[j] = makeCell(t, color, dens);
                 gridNext[i] = makeCell(TYPE.AIR, 0, 0);
                 break;
@@ -417,102 +392,21 @@
               }
             }
           }
-        } else if (t === TYPE.WATER) {
-          // Water tries to go down (into air only), then diagonals into air, then sideways into air
-          if (y + 1 < H) {
-            const d = idx(x, y + 1);
-            if (getType(grid[d]) === TYPE.AIR) {
-              // Always flow straight down into air (fix: ensure water goes down)
-              gridNext[d] = cell;
-              gridNext[i] = makeCell(TYPE.AIR, 0, 0);
-              continue;
-            }
-          }
-          // diagonals into air
-          const rightBias = params.tiltDeg > 0 ? 0.65 : (params.tiltDeg < 0 ? 0.35 : 0.5);
-          const dir = Math.random() < rightBias ? 1 : -1;
-          let moved = false;
-          for (let k = 0; k < 2; k++) {
-            const dx = (k === 0 ? dir : -dir);
-            const nx = x + dx, ny = y + 1;
-            if (nx >= 0 && nx < W && ny < H) {
-              const j = idx(nx, ny);
-              if (getType(grid[j]) === TYPE.AIR) {
-                // surface tension gate again but weaker
-                let allow = true;
-                const st = params.surfaceTension;
-                if (st > 0) {
-                  const tx = nx, ty = ny;
-                  let solids = 0;
-                  for (let oy = -1; oy <= 1; oy++) {
-                    for (let ox = -1; ox <= 1; ox++) {
-                      if (ox === 0 && oy === 0) continue;
-                      const ax = tx + ox, ay = ty + oy;
-                      if (ax < 0 || ax >= W || ay < 0 || ay >= H) { solids++; continue; }
-                      const tt = getType(grid[idx(ax, ay)]);
-                      if (isSandType(tt)) solids++;
-                    }
-                  }
-                  const gate = 1 - 0.6 * st * (solids / 8);
-                  allow = Math.random() < gate || Math.random() < params.turbulence * 0.2;
-                }
-                if (allow) {
-                  gridNext[j] = cell;
-                  gridNext[i] = makeCell(TYPE.AIR, 0, 0);
-                  moved = true;
-                  break;
-                }
-                moved = true;
-              }
-            }
-          }
-          if (moved) continue;
-          // lateral flow
-          const baseLateral = 3;
-          const lateralSteps = Math.max(1, Math.round(baseLateral * (1 - 0.8 * params.viscosity) * (1 + 0.5 * params.turbulence)));
-          const ddir = Math.random() < rightBias ? 1 : -1;
-          for (let step = 1; step <= lateralSteps; step++) {
-            const nx = x + ddir * step;
-            if (nx < 0 || nx >= W) break;
-            const j = idx(nx, y);
-            if (getType(grid[j]) === TYPE.AIR) {
-              gridNext[j] = cell;
-              gridNext[i] = makeCell(TYPE.AIR, 0, 0);
-              break;
-            }
-          }
-          // turbulence: random sideways even without slope
-          if (Math.random() < params.turbulence * 0.05) {
-            const sx = x + (Math.random() < 0.5 ? -1 : 1);
-            if (sx >= 0 && sx < W) {
-              const j = idx(sx, y);
-              if (getType(grid[j]) === TYPE.AIR) {
-                gridNext[j] = grid[i];
-                gridNext[i] = makeCell(TYPE.AIR, 0, 0);
-              }
-            }
-          }
         } else if (t === TYPE.AIR) {
-          // AIR bubbles rise: swap upwards with WATER deterministically,
-          // and occasionally with SAND to simulate bubbles that slow sand.
+          // AIR rises: occasionally swap upwards with sand to create bubble-like motion in sand columns
           if (y - 1 >= 0) {
             const u = idx(x, y - 1);
             const above = grid[u];
             const at = getType(above);
-            if (at === TYPE.WATER) {
-              // bubble rises through water
-              gridNext[u] = makeCell(TYPE.AIR, 0, 0);
-              gridNext[i] = makeCell(TYPE.WATER, getColor(above), 0);
-              continue;
-            } else if (isSandType(at) && Math.random() < 0.03) {
+            if (isSandType(at) && Math.random() < 0.03) {
               // rare bubble rise through sand, slowing sand columns
               gridNext[u] = makeCell(TYPE.AIR, 0, 0);
               gridNext[i] = makeCell(at, getColor(above), getDensity(above));
               continue;
             }
           }
-          // Try diagonal up through water to avoid being trapped under ledges
-          const dirU = Math.random() < (params.tiltDeg < 0 ? 0.65 : (params.tiltDeg > 0 ? 0.35 : 0.5)) ? -1 : 1; // bias opposite to water
+          // Try diagonal up to avoid being trapped under ledges
+          const dirU = Math.random() < (params.tiltDeg < 0 ? 0.65 : (params.tiltDeg > 0 ? 0.35 : 0.5)) ? -1 : 1;
           for (let k = 0; k < 2; k++) {
             const dx = (k === 0 ? dirU : -dirU);
             const nx = x + dx, ny = y - 1;
@@ -520,11 +414,7 @@
               const j = idx(nx, ny);
               const c2 = grid[j];
               const t2 = getType(c2);
-              if (t2 === TYPE.WATER) {
-                gridNext[j] = makeCell(TYPE.AIR, 0, 0);
-                gridNext[i] = makeCell(TYPE.WATER, getColor(c2), 0);
-                break;
-              }
+              // no water anymore; only interact with sand occasionally (handled above)
             }
           }
         }
@@ -541,8 +431,9 @@
       const cell = grid[i];
       const t = getType(cell);
       if (t === TYPE.AIR) {
-        // Make air visible as a lighter gray
-        data[p++] = 80; data[p++] = 86; data[p++] = 96; data[p++] = 255;
+        // Make air bubbles clearly visible: render as a much lighter gray
+        // than water so rising bubbles stand out.
+        data[p++] = 200; data[p++] = 208; data[p++] = 216; data[p++] = 255;
       } else if (t === TYPE.SAND_A) {
         const c = paletteA[0] || [200, 180, 90];
         // Slight darkening with density to hint heavier grains
@@ -561,8 +452,8 @@
         data[p++] = Math.max(0, c[1] * (1 - dark))|0; 
         data[p++] = Math.max(0, c[2] * (1 - dark))|0; 
         data[p++] = 255;
-      } else { // WATER
-        // Render water the same as air to avoid visible blue sprinkles
+      } else {
+        // Default background (should not occur, but keep a dark gray)
         data[p++] = 80; data[p++] = 86; data[p++] = 96; data[p++] = 255;
       }
     }
@@ -601,9 +492,8 @@
             if (paintType === TYPE.SAND_A || paintType === TYPE.SAND_B) {
               const dens = (Math.random() * params.densityLevels) | 0;
               grid[i] = makeCell(paintType, 0, dens);
-            } else if (paintType === TYPE.WATER) {
-              grid[i] = makeCell(TYPE.WATER, 0, 0);
             } else {
+              // only air remains besides sand types
               grid[i] = makeCell(TYPE.AIR, 0, 0);
             }
           }
@@ -616,7 +506,7 @@
   window.addEventListener('mouseup', () => { painting = false; });
   window.addEventListener('keydown', (e) => {
     if (e.key === '1') paintType = TYPE.SAND_A;
-    else if (e.key === '2') paintType = TYPE.WATER;
+    else if (e.key === '2') paintType = TYPE.AIR;
     else if (e.key === '3') paintType = TYPE.AIR;
     else if (e.key === '4') paintType = TYPE.SAND_B;
     else if (e.key.toLowerCase() === 'p') togglePause();
