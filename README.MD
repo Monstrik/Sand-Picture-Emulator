@@ -4,8 +4,6 @@
 An interactive browser-based simulation inspired by kinetic sand art frames. It simulates grains of sand and air in a 2D grid and renders the evolving picture on an HTML canvas. You can tweak physical-like parameters, paint materials, and watch dunes form as the world settles.
 
 
-aaaa
-
 This project is self‑contained: just open index.html in a modern browser, or run it with npm to start a local server that opens your browser automatically.
 
 ## Features
