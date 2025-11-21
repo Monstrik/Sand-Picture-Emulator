@@ -393,7 +393,9 @@
                 }
                 // Scale factor drops with more surrounding air (coalesced bubbles resist intrusion)
                 const st = params.surfaceTension;
-                const resistAir = Math.max(0.1, 1 - (0.08 + 0.10 * st) * airN);
+                // Stronger resistance against sand intruding into larger air pockets
+                // -> encourages bigger, more stable bubbles
+                const resistAir = Math.max(0.05, 1 - (0.12 + 0.14 * st) * airN);
                 // Sand moves into water more readily than into air
                 const baseWater = Math.max(0.12, (isA ? 0.18 : 0.14) * (1 - 0.6 * params.viscosity) * (0.7 + 0.6 * heaviness));
                 const chance = bt === TYPE.AIR
@@ -431,10 +433,11 @@
                     if (getType(grid[idx(ax, ay)]) === TYPE.AIR) airN++;
                   }
                 }
-                const base = Math.max(0.01, (isA ? 0.09 : 0.05) * viscScale * (0.55 + 0.6 * heaviness));
+                const base = Math.max(0.01, (isA ? 0.08 : 0.04) * viscScale * (0.55 + 0.6 * heaviness));
                 const st = params.surfaceTension;
-                const resist = Math.max(0.1, 1 - (0.08 + 0.10 * st) * airN);
-                const baseWater = Math.max(0.06, (isA ? 0.12 : 0.09) * (1 - 0.6 * params.viscosity) * (0.6 + 0.6 * heaviness));
+                // Stronger resistance diagonally as well
+                const resist = Math.max(0.05, 1 - (0.12 + 0.14 * st) * airN);
+                const baseWater = Math.max(0.06, (isA ? 0.11 : 0.08) * (1 - 0.6 * params.viscosity) * (0.6 + 0.6 * heaviness));
                 const chance = t2 === TYPE.AIR
                   ? Math.max(0, Math.min(1, base * resist))
                   : Math.max(0, Math.min(1, baseWater));
@@ -473,8 +476,9 @@
               if (ny2 >= 0 && ny2 < H && getType(grid[idx(x, ny2)]) === TYPE.AIR) nearAirAbove++;
               if (x - 1 >= 0 && getType(grid[idx(x - 1, ny)]) === TYPE.AIR) nearAirAbove++;
               if (x + 1 < W && getType(grid[idx(x + 1, ny)]) === TYPE.AIR) nearAirAbove++;
-              const riseBaseSand = 0.03 + 0.02 * turb + 0.03 * st + 0.02 * nearAirAbove;
-              const riseBaseWater = 0.09 + 0.03 * turb + 0.02 * st + 0.02 * nearAirAbove; // bubbles rise faster in water
+              // Faster rise of air (bubbles) through media and stronger pull toward nearby air
+              const riseBaseSand = 0.06 + 0.03 * turb + 0.04 * st + 0.04 * nearAirAbove;
+              const riseBaseWater = 0.15 + 0.05 * turb + 0.03 * st + 0.04 * nearAirAbove; // bubbles rise faster in water
               if ((isSandType(at) && Math.random() < riseBaseSand) || (at === TYPE.WATER && Math.random() < riseBaseWater)) {
                 // bubble rises through sand
                 gridNext[u] = makeCell(TYPE.AIR, 0, 0);
@@ -497,7 +501,8 @@
                 const aheadY = ny + upDir;
                 const hasAirAhead = (aheadY >= 0 && aheadY < H && getType(grid[idx(nx, aheadY)]) === TYPE.AIR)
                                    || (nx + dx >= 0 && nx + dx < W && getType(grid[idx(nx + dx, ny)]) === TYPE.AIR);
-                const chance = (t2 === TYPE.WATER ? 0.05 : 0.02) + 0.02 * st + 0.02 * turb + (hasAirAhead ? 0.03 : 0);
+                // Increase diagonal coalescence speed toward nearby air
+                const chance = (t2 === TYPE.WATER ? 0.09 : 0.04) + 0.03 * st + 0.03 * turb + (hasAirAhead ? 0.06 : 0);
                 if (hasAirAhead && Math.random() < chance) {
                   gridNext[j] = makeCell(TYPE.AIR, 0, 0);
                   gridNext[i] = makeCell(t2, getColor(c2), getDensity(c2));
@@ -514,7 +519,8 @@
             const tSide = getType(grid[j]);
             const ahead = sx + dx;
             if ((isSandType(tSide) || tSide === TYPE.WATER) && ahead >= 0 && ahead < W && getType(grid[idx(ahead, y)]) === TYPE.AIR) {
-              const chance = (tSide === TYPE.WATER ? 0.03 : 0.015) + 0.015 * st + 0.02 * turb;
+              // Increase lateral coalescence (move sideways toward air through thin sand)
+              const chance = (tSide === TYPE.WATER ? 0.06 : 0.03) + 0.02 * st + 0.03 * turb;
               if (Math.random() < chance) {
                 // Swap with side sand to drift toward the air pocket
                 gridNext[j] = makeCell(TYPE.AIR, 0, 0);
