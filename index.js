@@ -477,8 +477,24 @@
               if (x - 1 >= 0 && getType(grid[idx(x - 1, ny)]) === TYPE.AIR) nearAirAbove++;
               if (x + 1 < W && getType(grid[idx(x + 1, ny)]) === TYPE.AIR) nearAirAbove++;
               // Faster rise of air (bubbles) through media and stronger pull toward nearby air
-              const riseBaseSand = 0.06 + 0.03 * turb + 0.04 * st + 0.04 * nearAirAbove;
+              let riseBaseSand = 0.06 + 0.03 * turb + 0.04 * st + 0.04 * nearAirAbove;
               const riseBaseWater = 0.15 + 0.05 * turb + 0.03 * st + 0.04 * nearAirAbove; // bubbles rise faster in water
+              // NEW: When a bubble meets sand, it slows down depending on surrounding sand density
+              if (isSandType(at)) {
+                let sandN = 0;
+                for (let oy = -1; oy <= 1; oy++) {
+                  for (let ox = -1; ox <= 1; ox++) {
+                    if (ox === 0 && oy === 0) continue;
+                    const ax = x + ox, ay = ny + oy;
+                    if (ax < 0 || ax >= W || ay < 0 || ay >= H) continue;
+                    const tt = getType(grid[idx(ax, ay)]);
+                    if (tt === TYPE.SAND_A || tt === TYPE.SAND_B) sandN++;
+                  }
+                }
+                const visc = params.viscosity;
+                const slow = Math.max(0.25, 1 - (0.07 + 0.10 * visc) * sandN);
+                riseBaseSand *= slow;
+              }
               if ((isSandType(at) && Math.random() < riseBaseSand) || (at === TYPE.WATER && Math.random() < riseBaseWater)) {
                 // bubble rises through sand
                 gridNext[u] = makeCell(TYPE.AIR, 0, 0);
@@ -502,7 +518,22 @@
                 const hasAirAhead = (aheadY >= 0 && aheadY < H && getType(grid[idx(nx, aheadY)]) === TYPE.AIR)
                                    || (nx + dx >= 0 && nx + dx < W && getType(grid[idx(nx + dx, ny)]) === TYPE.AIR);
                 // Increase diagonal coalescence speed toward nearby air
-                const chance = (t2 === TYPE.WATER ? 0.09 : 0.04) + 0.03 * st + 0.03 * turb + (hasAirAhead ? 0.06 : 0);
+                let chance = (t2 === TYPE.WATER ? 0.09 : 0.04) + 0.03 * st + 0.03 * turb + (hasAirAhead ? 0.06 : 0);
+                // NEW: Slow down diagonal coalescence when passing through sand
+                if (isSandType(t2)) {
+                  let sandN = 0;
+                  for (let oy = -1; oy <= 1; oy++) {
+                    for (let ox = -1; ox <= 1; ox++) {
+                      if (ox === 0 && oy === 0) continue;
+                      const ax = nx + ox, ay = ny + oy;
+                      if (ax < 0 || ax >= W || ay < 0 || ay >= H) continue;
+                      const tt = getType(grid[idx(ax, ay)]);
+                      if (tt === TYPE.SAND_A || tt === TYPE.SAND_B) sandN++;
+                    }
+                  }
+                  const slow = Math.max(0.25, 1 - (0.07 + 0.10 * params.viscosity) * sandN);
+                  chance *= slow;
+                }
                 if (hasAirAhead && Math.random() < chance) {
                   gridNext[j] = makeCell(TYPE.AIR, 0, 0);
                   gridNext[i] = makeCell(t2, getColor(c2), getDensity(c2));
@@ -520,7 +551,22 @@
             const ahead = sx + dx;
             if ((isSandType(tSide) || tSide === TYPE.WATER) && ahead >= 0 && ahead < W && getType(grid[idx(ahead, y)]) === TYPE.AIR) {
               // Increase lateral coalescence (move sideways toward air through thin sand)
-              const chance = (tSide === TYPE.WATER ? 0.06 : 0.03) + 0.02 * st + 0.03 * turb;
+              let chance = (tSide === TYPE.WATER ? 0.06 : 0.03) + 0.02 * st + 0.03 * turb;
+              // NEW: Lateral motion also slows when crossing sand
+              if (isSandType(tSide)) {
+                let sandN = 0;
+                for (let oy = -1; oy <= 1; oy++) {
+                  for (let ox = -1; ox <= 1; ox++) {
+                    if (ox === 0 && oy === 0) continue;
+                    const ax = sx + ox, ay = y + oy;
+                    if (ax < 0 || ax >= W || ay < 0 || ay >= H) continue;
+                    const tt = getType(grid[idx(ax, ay)]);
+                    if (tt === TYPE.SAND_A || tt === TYPE.SAND_B) sandN++;
+                  }
+                }
+                const slow = Math.max(0.25, 1 - (0.07 + 0.10 * params.viscosity) * sandN);
+                chance *= slow;
+              }
               if (Math.random() < chance) {
                 // Swap with side sand to drift toward the air pocket
                 gridNext[j] = makeCell(TYPE.AIR, 0, 0);
