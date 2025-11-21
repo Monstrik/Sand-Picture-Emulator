@@ -69,6 +69,7 @@
       <div class="app">
         <div class="panel">
           <h1>Sand Picture Emulator</h1>
+          <button id="flip">Flip</button>
           <div class="control">
             <label>Sand A color <span><input id="sandColorA" type="color" value="#c8b04a"/></span></label>
           </div>
@@ -123,7 +124,6 @@
           </div>
           <div class="buttons">
             <button id="randomize">Randomize</button>
-            <button id="flip">Flip</button>
           </div>
           <div class="legend">Tip: Drag on the canvas to paint. 1=Sand A, 4=Sand B, 2/3=Air.</div>
         </div>
