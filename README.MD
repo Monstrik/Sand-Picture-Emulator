@@ -9,6 +9,7 @@ This project is self‑contained: just open index.html in a modern browser, or r
 ## Features
 
 - Sand and air cellular simulation with falling and sliding behavior
+  - Air pockets coalesce into larger bubbles that resist intrusion and slow sand falling
 - Two distinct sand types (A and B) with adjustable colors
 - Adjustable world size and simulation speed
 - Physical-like parameters: viscosity, surface tension, tilt, turbulence
@@ -62,6 +63,7 @@ No build step or dependencies are required.
   - Reset: Rebuild the world using current sliders (deterministic layout).
   - Randomize: Rebuild the world with a randomized initial distribution.
   - Pause: Toggle pause/resume.
+  - Flip: Animate the canvas with a 180° rotation around the X‑axis (vertical flip). Click again to flip back. When flipped, the simulation’s gravity is inverted: sand moves toward the new “down,” and air rises toward the new “up.”
 
 ## Canvas Interaction and Shortcuts
 
@@ -82,7 +84,7 @@ The simulation runs on an integer grid updated from bottom to top each step. Eac
 - Color index (for extensibility; currently base colors)
 - Density level (heavier sand tends to settle faster)
 
-Rendering writes pixels directly with ImageData for performance. Air is rendered as a neutral light gray background; sand colors are slightly darkened by density to suggest weight.
+Rendering writes pixels directly with ImageData for performance. Air is rendered in limegreen on a dark background for high visibility. Air pockets tend to merge into bubbles, and these bubbles resist sand entry, slowing the overall settling. Sand colors are slightly darkened by density to suggest weight.
 
 ## Performance Tips
 

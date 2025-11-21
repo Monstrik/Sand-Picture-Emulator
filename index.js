@@ -60,7 +60,10 @@
           position: relative;
           width: 100%;
           height: 100%;
+          perspective: 900px; /* enable 3D space for flip */
         }
+        #canvasWrap canvas { transition: transform 0.6s ease; transform-style: preserve-3d; will-change: transform; transform-origin: 50% 50%; }
+        #canvasWrap.flipped canvas { transform: rotateX(180deg); }
         .legend { font-size: 12px; color: var(--muted-fg); margin-top: 8px; }
       </style>
       <div class="app">
@@ -116,6 +119,7 @@
           </div>
           <div class="buttons">
             <button id="randomize">Randomize</button>
+            <button id="flip">Flip</button>
           </div>
           <div class="legend">Tip: Drag on the canvas to paint. 1=Sand A, 4=Sand B, 2/3=Air.</div>
         </div>
@@ -144,6 +148,7 @@
   const resetBtn = $('reset');
   const randomizeBtn = $('randomize');
   const pauseBtn = $('pause');
+  const flipBtn = $('flip');
   const speedRange = $('speed');
 
   const sandVal = $('sandVal');
@@ -244,6 +249,8 @@
   let grid, gridNext, imgData, ctx, paused = false;
   let paletteA = [];
   let paletteB = [];
+  // Physics flip state: when true, gravity is inverted (visual Flip button)
+  let worldFlipped = false;
   function hexToRgb(hex) {
     // supports #rrggbb or #rgb
     const h = hex.replace('#','');
@@ -332,8 +339,14 @@
 
   function step() {
     gridNext.set(grid); // start from current, then mutate moves
-    // Update from bottom to top to handle falling
-    for (let y = H - 1; y >= 0; y--) {
+    // Determine vertical direction depending on flip state
+    const downDir = worldFlipped ? -1 : 1; // along +Y normally, -Y when flipped
+    const upDir = -downDir;
+    // Process rows starting from the direction of gravity to reduce artifacts
+    const yStart = (downDir === 1) ? (H - 1) : 0;
+    const yEnd = (downDir === 1) ? -1 : H;
+    const yStep = (downDir === 1) ? -1 : 1;
+    for (let y = yStart; y !== yEnd; y += yStep) {
       const isEvenRow = (y & 1) === 0;
       for (let xi = 0; xi < W; xi++) {
         const x = isEvenRow ? xi : W - 1 - xi; // alternate to reduce bias
@@ -349,17 +362,38 @@
           const isA = (t === TYPE.SAND_A);
           const baseFallAir = isA ? 0.12 : 0.06; // Sand A faster than Sand B
           const viscScale = 1 - 0.75 * params.viscosity; // high viscosity => slower
-          const fallIntoAirChance = Math.max(0, Math.min(1, baseFallAir * (0.6 + 0.6 * heaviness) * viscScale));
-          // Try down
-          if (y + 1 < H) {
-            const d = idx(x, y + 1);
-            const below = grid[d];
-            const bt = getType(below);
-            if (bt === TYPE.AIR && Math.random() < fallIntoAirChance) {
-              // swap with below
-              gridNext[d] = makeCell(t, color, dens);
-              gridNext[i] = makeCell(TYPE.AIR, 0, 0);
-              continue;
+          let fallIntoAirChance = Math.max(0, Math.min(1, baseFallAir * (0.6 + 0.6 * heaviness) * viscScale));
+          // Try down (in direction of gravity)
+          {
+            const ny = y + downDir;
+            if (ny >= 0 && ny < H) {
+              const d = idx(x, ny);
+              const below = grid[d];
+              const bt = getType(below);
+              if (bt === TYPE.AIR) {
+                // Bubble resistance: if the air below belongs to a larger pocket,
+                // strongly reduce the chance for sand to enter it.
+                // Count AIR in Moore neighborhood around target (x, y+1)
+                let airN = 0;
+                for (let oy = -1; oy <= 1; oy++) {
+                  for (let ox = -1; ox <= 1; ox++) {
+                    if (ox === 0 && oy === 0) continue;
+                    const ax = x + ox, ay = ny + oy;
+                    if (ax < 0 || ax >= W || ay < 0 || ay >= H) continue;
+                    if (getType(grid[idx(ax, ay)]) === TYPE.AIR) airN++;
+                  }
+                }
+                // Scale factor drops with more surrounding air (coalesced bubbles resist intrusion)
+                const st = params.surfaceTension;
+                const resist = Math.max(0.1, 1 - (0.08 + 0.10 * st) * airN);
+                const chance = Math.max(0, Math.min(1, fallIntoAirChance * resist));
+                if (Math.random() < chance) {
+                  // swap with below
+                  gridNext[d] = makeCell(t, color, dens);
+                  gridNext[i] = makeCell(TYPE.AIR, 0, 0);
+                  continue;
+                }
+              }
             }
           }
           // Try diagonals
@@ -369,15 +403,31 @@
           const dir = Math.random() < rightBias ? 1 : -1;
           for (let k = 0; k < 2; k++) {
             const dx = (k === 0 ? dir : -dir);
-            const nx = x + dx, ny = y + 1;
-            if (nx >= 0 && nx < W && ny < H) {
+            const nx = x + dx, ny = y + downDir;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
               const j = idx(nx, ny);
               const c2 = grid[j];
               const t2 = getType(c2);
-              if (t2 === TYPE.AIR && Math.random() < Math.max(0.01, (isA ? 0.09 : 0.05) * viscScale * (0.55 + 0.6 * heaviness))) {
-                gridNext[j] = makeCell(t, color, dens);
-                gridNext[i] = makeCell(TYPE.AIR, 0, 0);
-                break;
+              if (t2 === TYPE.AIR) {
+                // Bubble resistance also applies to diagonal entries
+                let airN = 0;
+                for (let oy = -1; oy <= 1; oy++) {
+                  for (let ox = -1; ox <= 1; ox++) {
+                    if (ox === 0 && oy === 0) continue;
+                    const ax = nx + ox, ay = ny + oy;
+                    if (ax < 0 || ax >= W || ay < 0 || ay >= H) continue;
+                    if (getType(grid[idx(ax, ay)]) === TYPE.AIR) airN++;
+                  }
+                }
+                const base = Math.max(0.01, (isA ? 0.09 : 0.05) * viscScale * (0.55 + 0.6 * heaviness));
+                const st = params.surfaceTension;
+                const resist = Math.max(0.1, 1 - (0.08 + 0.10 * st) * airN);
+                const chance = Math.max(0, Math.min(1, base * resist));
+                if (Math.random() < chance) {
+                  gridNext[j] = makeCell(t, color, dens);
+                  gridNext[i] = makeCell(TYPE.AIR, 0, 0);
+                  break;
+                }
               }
             }
           }
@@ -393,28 +443,68 @@
             }
           }
         } else if (t === TYPE.AIR) {
-          // AIR rises: occasionally swap upwards with sand to create bubble-like motion in sand columns
-          if (y - 1 >= 0) {
-            const u = idx(x, y - 1);
-            const above = grid[u];
-            const at = getType(above);
-            if (isSandType(at) && Math.random() < 0.03) {
-              // rare bubble rise through sand, slowing sand columns
-              gridNext[u] = makeCell(TYPE.AIR, 0, 0);
-              gridNext[i] = makeCell(at, getColor(above), getDensity(above));
-              continue;
+          // AIR rises and tends to coalesce into larger bubbles
+          const st = params.surfaceTension;
+          const turb = params.turbulence;
+          {
+            const ny = y + upDir;
+            if (ny >= 0 && ny < H) {
+              const u = idx(x, ny);
+              const above = grid[u];
+              const at = getType(above);
+              // Increase upward swap probability if there is air nearby above (coalescence)
+              let nearAirAbove = 0;
+              const ny2 = y + 2 * upDir;
+              if (ny2 >= 0 && ny2 < H && getType(grid[idx(x, ny2)]) === TYPE.AIR) nearAirAbove++;
+              if (x - 1 >= 0 && getType(grid[idx(x - 1, ny)]) === TYPE.AIR) nearAirAbove++;
+              if (x + 1 < W && getType(grid[idx(x + 1, ny)]) === TYPE.AIR) nearAirAbove++;
+              const riseBase = 0.03 + 0.02 * turb + 0.03 * st + 0.02 * nearAirAbove;
+              if (isSandType(at) && Math.random() < riseBase) {
+                // bubble rises through sand
+                gridNext[u] = makeCell(TYPE.AIR, 0, 0);
+                gridNext[i] = makeCell(at, getColor(above), getDensity(above));
+                continue;
+              }
             }
           }
-          // Try diagonal up to avoid being trapped under ledges
+          // Diagonal upward coalescence: move toward nearby air above-diagonally
           const dirU = Math.random() < (params.tiltDeg < 0 ? 0.65 : (params.tiltDeg > 0 ? 0.35 : 0.5)) ? -1 : 1;
           for (let k = 0; k < 2; k++) {
             const dx = (k === 0 ? dirU : -dirU);
-            const nx = x + dx, ny = y - 1;
-            if (nx >= 0 && nx < W && ny >= 0) {
+            const nx = x + dx, ny = y + upDir;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
               const j = idx(nx, ny);
               const c2 = grid[j];
               const t2 = getType(c2);
-              // no water anymore; only interact with sand occasionally (handled above)
+              if (isSandType(t2)) {
+                // If there is air beyond the sand in the direction of travel, try to swap
+                const aheadY = ny + upDir;
+                const hasAirAhead = (aheadY >= 0 && aheadY < H && getType(grid[idx(nx, aheadY)]) === TYPE.AIR)
+                                   || (nx + dx >= 0 && nx + dx < W && getType(grid[idx(nx + dx, ny)]) === TYPE.AIR);
+                const chance = 0.02 + 0.02 * st + 0.02 * turb + (hasAirAhead ? 0.03 : 0);
+                if (hasAirAhead && Math.random() < chance) {
+                  gridNext[j] = makeCell(TYPE.AIR, 0, 0);
+                  gridNext[i] = makeCell(t2, getColor(c2), getDensity(c2));
+                  continue;
+                }
+              }
+            }
+          }
+          // Lateral coalescence through sand: move sideways toward adjacent air if separated by one sand cell
+          for (const dx of [-1, 1]) {
+            const sx = x + dx;
+            if (sx < 0 || sx >= W) continue;
+            const j = idx(sx, y);
+            const tSide = getType(grid[j]);
+            const ahead = sx + dx;
+            if (isSandType(tSide) && ahead >= 0 && ahead < W && getType(grid[idx(ahead, y)]) === TYPE.AIR) {
+              const chance = 0.015 + 0.015 * st + 0.02 * turb;
+              if (Math.random() < chance) {
+                // Swap with side sand to drift toward the air pocket
+                gridNext[j] = makeCell(TYPE.AIR, 0, 0);
+                gridNext[i] = makeCell(tSide, getColor(grid[j]), getDensity(grid[j]));
+                break;
+              }
             }
           }
         }
@@ -431,9 +521,8 @@
       const cell = grid[i];
       const t = getType(cell);
       if (t === TYPE.AIR) {
-        // Make air bubbles clearly visible: render as a much lighter gray
-        // than water so rising bubbles stand out.
-        data[p++] = 200; data[p++] = 208; data[p++] = 216; data[p++] = 255;
+        // TEST: Color air bubbles bright red for maximum visibility during testing
+        data[p++] = 255; data[p++] = 0; data[p++] = 0; data[p++] = 255;
       } else if (t === TYPE.SAND_A) {
         const c = paletteA[0] || [200, 180, 90];
         // Slight darkening with density to hint heavier grains
@@ -525,7 +614,16 @@
     initWorld(true);
   });
   pauseBtn.addEventListener('click', togglePause);
-  // Note: Flip features removed per request
+  // Flip button: toggle vertical 3D flip animation on the canvas container
+  if (flipBtn) {
+    flipBtn.addEventListener('click', () => {
+      const wrap = document.getElementById('canvasWrap');
+      if (!wrap) return;
+      // Toggle visual flip and sync physics gravity inversion
+      const nowFlipped = wrap.classList.toggle('flipped');
+      worldFlipped = nowFlipped;
+    });
+  }
 
   // Initial
   updatePercents('sand');
