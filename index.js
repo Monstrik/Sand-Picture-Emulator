@@ -368,9 +368,9 @@
           // Air resists sand going down: only allow moves into AIR with low probability
           // Make sand much slower than rising air bubbles
           const isA = (t === TYPE.SAND_A);
-          const baseFallAir = isA ? 0.12 : 0.06; // Sand A faster than Sand B
+          const baseFallAir = isA ? 0.03 : 0.015; // Reduced from 0.12/0.06 - sand much slower into air
           const viscScale = 1 - 0.75 * params.viscosity; // high viscosity => slower
-          let fallIntoAirChance = Math.max(0, Math.min(1, baseFallAir * (0.6 + 0.6 * heaviness) * viscScale));
+          let fallIntoAirChance = Math.max(0, Math.min(1, baseFallAir * (0.4 + 0.6 * heaviness) * viscScale));
           // Try down (in direction of gravity)
           {
             const ny = y + downDir;
@@ -393,9 +393,9 @@
                 }
                 // Scale factor drops with more surrounding air (coalesced bubbles resist intrusion)
                 const st = params.surfaceTension;
-                // Stronger resistance against sand intruding into larger air pockets
-                // -> encourages bigger, more stable bubbles
-                const resistAir = Math.max(0.05, 1 - (0.12 + 0.14 * st) * airN);
+                // Exponential resistance growth - bubbles become nearly impenetrable
+                // airN=0 → 1.0x, airN=4 → 0.25x, airN=8 → 0.0625x (strong resistance)
+                const resistAir = Math.pow(0.5, (0.25 + 0.15 * st) * airN);
                 // Sand moves into water more readily than into air
                 const baseWater = Math.max(0.12, (isA ? 0.18 : 0.14) * (1 - 0.6 * params.viscosity) * (0.7 + 0.6 * heaviness));
                 const chance = bt === TYPE.AIR
@@ -435,8 +435,8 @@
                 }
                 const base = Math.max(0.01, (isA ? 0.08 : 0.04) * viscScale * (0.55 + 0.6 * heaviness));
                 const st = params.surfaceTension;
-                // Stronger resistance diagonally as well
-                const resist = Math.max(0.05, 1 - (0.12 + 0.14 * st) * airN);
+                // Exponential resistance for diagonal movement as well
+                const resist = Math.pow(0.5, (0.25 + 0.15 * st) * airN);
                 const baseWater = Math.max(0.06, (isA ? 0.11 : 0.08) * (1 - 0.6 * params.viscosity) * (0.6 + 0.6 * heaviness));
                 const chance = t2 === TYPE.AIR
                   ? Math.max(0, Math.min(1, base * resist))
@@ -477,9 +477,9 @@
               if (x - 1 >= 0 && getType(grid[idx(x - 1, ny)]) === TYPE.AIR) nearAirAbove++;
               if (x + 1 < W && getType(grid[idx(x + 1, ny)]) === TYPE.AIR) nearAirAbove++;
               // Faster rise of air (bubbles) through media and stronger pull toward nearby air
-              let riseBaseSand = 0.06 + 0.03 * turb + 0.04 * st + 0.04 * nearAirAbove;
+              let riseBaseSand = 0.12 + 0.06 * turb + 0.08 * st + 0.08 * nearAirAbove; // Doubled base values
               const riseBaseWater = 0.15 + 0.05 * turb + 0.03 * st + 0.04 * nearAirAbove; // bubbles rise faster in water
-              // NEW: When a bubble meets sand, it slows down depending on surrounding sand density
+              // When a bubble meets sand, moderate slowdown (was too aggressive)
               if (isSandType(at)) {
                 let sandN = 0;
                 for (let oy = -1; oy <= 1; oy++) {
@@ -492,7 +492,7 @@
                   }
                 }
                 const visc = params.viscosity;
-                const slow = Math.max(0.25, 1 - (0.07 + 0.10 * visc) * sandN);
+                const slow = Math.max(0.5, 1 - (0.05 + 0.08 * visc) * sandN); // Increased minimum from 0.25 to 0.5
                 riseBaseSand *= slow;
               }
               if ((isSandType(at) && Math.random() < riseBaseSand) || (at === TYPE.WATER && Math.random() < riseBaseWater)) {
@@ -519,7 +519,7 @@
                                    || (nx + dx >= 0 && nx + dx < W && getType(grid[idx(nx + dx, ny)]) === TYPE.AIR);
                 // Increase diagonal coalescence speed toward nearby air
                 let chance = (t2 === TYPE.WATER ? 0.09 : 0.04) + 0.03 * st + 0.03 * turb + (hasAirAhead ? 0.06 : 0);
-                // NEW: Slow down diagonal coalescence when passing through sand
+                // Moderate slowdown for diagonal coalescence when passing through sand
                 if (isSandType(t2)) {
                   let sandN = 0;
                   for (let oy = -1; oy <= 1; oy++) {
@@ -531,7 +531,7 @@
                       if (tt === TYPE.SAND_A || tt === TYPE.SAND_B) sandN++;
                     }
                   }
-                  const slow = Math.max(0.25, 1 - (0.07 + 0.10 * params.viscosity) * sandN);
+                  const slow = Math.max(0.5, 1 - (0.05 + 0.08 * params.viscosity) * sandN); // Increased minimum
                   chance *= slow;
                 }
                 if (hasAirAhead && Math.random() < chance) {
@@ -552,7 +552,7 @@
             if ((isSandType(tSide) || tSide === TYPE.WATER) && ahead >= 0 && ahead < W && getType(grid[idx(ahead, y)]) === TYPE.AIR) {
               // Increase lateral coalescence (move sideways toward air through thin sand)
               let chance = (tSide === TYPE.WATER ? 0.06 : 0.03) + 0.02 * st + 0.03 * turb;
-              // NEW: Lateral motion also slows when crossing sand
+              // Moderate slowdown for lateral motion when crossing sand
               if (isSandType(tSide)) {
                 let sandN = 0;
                 for (let oy = -1; oy <= 1; oy++) {
@@ -564,7 +564,7 @@
                     if (tt === TYPE.SAND_A || tt === TYPE.SAND_B) sandN++;
                   }
                 }
-                const slow = Math.max(0.25, 1 - (0.07 + 0.10 * params.viscosity) * sandN);
+                const slow = Math.max(0.5, 1 - (0.05 + 0.08 * params.viscosity) * sandN); // Increased minimum
                 chance *= slow;
               }
               if (Math.random() < chance) {
@@ -589,8 +589,25 @@
       const cell = grid[i];
       const t = getType(cell);
       if (t === TYPE.AIR) {
-        // Render air as dark background, not bright red
-        data[p++] = 17; data[p++] = 17; data[p++] = 17; data[p++] = 255;
+        // Count surrounding air to determine if this is part of a bubble
+        let airNeighbors = 0;
+        const y = Math.floor(i / W);
+        const x = i % W;
+        for (let oy = -1; oy <= 1; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            if (ox === 0 && oy === 0) continue;
+            const ax = x + ox, ay = y + oy;
+            if (ax >= 0 && ax < W && ay >= 0 && ay < H) {
+              if (getType(grid[idx(ax, ay)]) === TYPE.AIR) airNeighbors++;
+            }
+          }
+        }
+        // Render bubbles (>=3 air neighbors) in bright limegreen, isolated air in lighter gray
+        if (airNeighbors >= 3) {
+          data[p++] = 50; data[p++] = 205; data[p++] = 50; data[p++] = 255; // limegreen
+        } else {
+          data[p++] = 70; data[p++] = 70; data[p++] = 70; data[p++] = 255; // light gray
+        }
       } else if (t === TYPE.WATER) {
         // Render water as cool blue at 50% transparency
         data[p++] = 58; data[p++] = 112; data[p++] = 168; data[p++] = 128;
