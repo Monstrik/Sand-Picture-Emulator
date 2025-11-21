@@ -365,12 +365,10 @@
           const color = getColor(cell);
           const dens = Math.max(0, Math.min(params.densityLevels - 1, getDensity(cell)));
           const heaviness = params.densityLevels > 1 ? (dens / (params.densityLevels - 1)) : 1; // 0..1
-          // Air resists sand going down: only allow moves into AIR with low probability
-          // Make sand much slower than rising air bubbles
+          // Sand cannot penetrate air bubbles - it must flow around them
           const isA = (t === TYPE.SAND_A);
-          const baseFallAir = isA ? 0.03 : 0.015; // Reduced from 0.12/0.06 - sand much slower into air
           const viscScale = 1 - 0.75 * params.viscosity; // high viscosity => slower
-          let fallIntoAirChance = Math.max(0, Math.min(1, baseFallAir * (0.4 + 0.6 * heaviness) * viscScale));
+
           // Try down (in direction of gravity)
           {
             const ny = y + downDir;
@@ -378,10 +376,17 @@
               const d = idx(x, ny);
               const below = grid[d];
               const bt = getType(below);
-              if (bt === TYPE.AIR || bt === TYPE.WATER) {
-                // Bubble resistance: if the air below belongs to a larger pocket,
-                // strongly reduce the chance for sand to enter it.
-                // Count AIR in Moore neighborhood around target (x, y+1)
+
+              if (bt === TYPE.WATER) {
+                // Sand moves into water freely
+                const baseWater = Math.max(0.12, (isA ? 0.18 : 0.14) * (1 - 0.6 * params.viscosity) * (0.7 + 0.6 * heaviness));
+                if (Math.random() < baseWater) {
+                  gridNext[d] = makeCell(t, color, dens);
+                  gridNext[i] = makeCell(TYPE.WATER, 0, 0);
+                  continue;
+                }
+              } else if (bt === TYPE.AIR) {
+                // Check if this is a bubble (3+ air neighbors) or isolated air
                 let airN = 0;
                 for (let oy = -1; oy <= 1; oy++) {
                   for (let ox = -1; ox <= 1; ox++) {
@@ -391,26 +396,24 @@
                     if (getType(grid[idx(ax, ay)]) === TYPE.AIR) airN++;
                   }
                 }
-                // Scale factor drops with more surrounding air (coalesced bubbles resist intrusion)
-                const st = params.surfaceTension;
-                // Exponential resistance growth - bubbles become nearly impenetrable
-                // airN=0 → 1.0x, airN=4 → 0.25x, airN=8 → 0.0625x (strong resistance)
-                const resistAir = Math.pow(0.5, (0.25 + 0.15 * st) * airN);
-                // Sand moves into water more readily than into air
-                const baseWater = Math.max(0.12, (isA ? 0.18 : 0.14) * (1 - 0.6 * params.viscosity) * (0.7 + 0.6 * heaviness));
-                const chance = bt === TYPE.AIR
-                  ? Math.max(0, Math.min(1, fallIntoAirChance * resistAir))
-                  : Math.max(0, Math.min(1, baseWater));
-                if (Math.random() < chance) {
-                  // swap with below
-                  gridNext[d] = makeCell(t, color, dens);
-                  gridNext[i] = makeCell(bt === TYPE.AIR ? TYPE.AIR : TYPE.WATER, 0, 0);
-                  continue;
+
+                // Bubbles (airN >= 3) are COMPLETELY impenetrable
+                // Only isolated air particles can be displaced
+                if (airN < 3) {
+                  // Isolated air can be displaced slowly by heavy sand
+                  const baseFallAir = isA ? 0.04 : 0.02;
+                  const fallIntoAirChance = baseFallAir * (0.4 + 0.6 * heaviness) * viscScale;
+                  if (Math.random() < fallIntoAirChance) {
+                    gridNext[d] = makeCell(t, color, dens);
+                    gridNext[i] = makeCell(TYPE.AIR, 0, 0);
+                    continue;
+                  }
                 }
+                // Otherwise, bubble blocks sand - sand must try to flow around it
               }
             }
           }
-          // Try diagonals
+          // Try diagonals - sand flows around obstacles
           // Tilt bias: positive tilt favors moving down-right
           const tilt = params.tiltDeg;
           const rightBias = tilt > 0 ? 0.65 : (tilt < 0 ? 0.35 : 0.5);
@@ -422,8 +425,17 @@
               const j = idx(nx, ny);
               const c2 = grid[j];
               const t2 = getType(c2);
-              if (t2 === TYPE.AIR || t2 === TYPE.WATER) {
-                // Bubble resistance also applies to diagonal entries
+
+              if (t2 === TYPE.WATER) {
+                // Sand flows diagonally through water
+                const baseWater = Math.max(0.06, (isA ? 0.11 : 0.08) * (1 - 0.6 * params.viscosity) * (0.6 + 0.6 * heaviness));
+                if (Math.random() < baseWater) {
+                  gridNext[j] = makeCell(t, color, dens);
+                  gridNext[i] = makeCell(TYPE.WATER, 0, 0);
+                  break;
+                }
+              } else if (t2 === TYPE.AIR) {
+                // Check if diagonal target is a bubble
                 let airN = 0;
                 for (let oy = -1; oy <= 1; oy++) {
                   for (let ox = -1; ox <= 1; ox++) {
@@ -433,24 +445,86 @@
                     if (getType(grid[idx(ax, ay)]) === TYPE.AIR) airN++;
                   }
                 }
-                const base = Math.max(0.01, (isA ? 0.08 : 0.04) * viscScale * (0.55 + 0.6 * heaviness));
-                const st = params.surfaceTension;
-                // Exponential resistance for diagonal movement as well
-                const resist = Math.pow(0.5, (0.25 + 0.15 * st) * airN);
-                const baseWater = Math.max(0.06, (isA ? 0.11 : 0.08) * (1 - 0.6 * params.viscosity) * (0.6 + 0.6 * heaviness));
-                const chance = t2 === TYPE.AIR
-                  ? Math.max(0, Math.min(1, base * resist))
-                  : Math.max(0, Math.min(1, baseWater));
-                if (Math.random() < chance) {
-                  gridNext[j] = makeCell(t, color, dens);
-                  gridNext[i] = makeCell(t2 === TYPE.AIR ? TYPE.AIR : TYPE.WATER, 0, 0);
-                  break;
+
+                // Bubbles block diagonal movement too - only isolated air can be displaced
+                if (airN < 3) {
+                  const base = Math.max(0.01, (isA ? 0.05 : 0.025) * viscScale * (0.55 + 0.6 * heaviness));
+                  if (Math.random() < base) {
+                    gridNext[j] = makeCell(t, color, dens);
+                    gridNext[i] = makeCell(TYPE.AIR, 0, 0);
+                    break;
+                  }
+                }
+                // Bubble blocks sand - try other direction
+              }
+            }
+          }
+          // Enhanced lateral flow: sand slides sideways when blocked by bubbles
+          // Check if sand is blocked below by a bubble
+          let blockedBelow = false;
+          const belowY = y + downDir;
+          if (belowY >= 0 && belowY < H) {
+            const belowType = getType(grid[idx(x, belowY)]);
+            if (belowType === TYPE.AIR) {
+              // Check if it's a bubble
+              let airCount = 0;
+              for (let oy = -1; oy <= 1; oy++) {
+                for (let ox = -1; ox <= 1; ox++) {
+                  if (ox === 0 && oy === 0) continue;
+                  const ax = x + ox, ay = belowY + oy;
+                  if (ax >= 0 && ax < W && ay >= 0 && ay < H) {
+                    if (getType(grid[idx(ax, ay)]) === TYPE.AIR) airCount++;
+                  }
+                }
+              }
+              if (airCount >= 3) blockedBelow = true;
+            } else if (isSandType(belowType)) {
+              blockedBelow = true; // Also blocked by sand
+            }
+          }
+
+          // When blocked, sand has higher chance to flow sideways
+          if (blockedBelow) {
+            const lateralChance = 0.3 * (1 - 0.5 * params.viscosity); // Increased from turbulence
+            if (Math.random() < lateralChance) {
+              const sx = x + (Math.random() < rightBias ? 1 : -1);
+              if (sx >= 0 && sx < W) {
+                const j = idx(sx, y);
+                const sideType = getType(grid[j]);
+                if (sideType === TYPE.AIR || sideType === TYPE.WATER) {
+                  // Check if side position is also blocked below (don't move to another blocked position)
+                  const sideBelowY = y + downDir;
+                  let sideBlocked = false;
+                  if (sideBelowY >= 0 && sideBelowY < H) {
+                    const sideBelowType = getType(grid[idx(sx, sideBelowY)]);
+                    if (sideBelowType === TYPE.AIR) {
+                      let sideAirCount = 0;
+                      for (let oy = -1; oy <= 1; oy++) {
+                        for (let ox = -1; ox <= 1; ox++) {
+                          if (ox === 0 && oy === 0) continue;
+                          const ax = sx + ox, ay = sideBelowY + oy;
+                          if (ax >= 0 && ax < W && ay >= 0 && ay < H) {
+                            if (getType(grid[idx(ax, ay)]) === TYPE.AIR) sideAirCount++;
+                          }
+                        }
+                      }
+                      if (sideAirCount >= 3) sideBlocked = true;
+                    } else if (isSandType(sideBelowType)) {
+                      sideBlocked = true;
+                    }
+                  }
+                  // Only move sideways if it can potentially fall further
+                  if (!sideBlocked || Math.random() < 0.3) {
+                    gridNext[j] = makeCell(t, color, dens);
+                    gridNext[i] = makeCell(sideType, 0, 0);
+                  }
                 }
               }
             }
           }
-          // Turbulent sideways jitter in air
-          if (Math.random() < params.turbulence * 0.03) {
+
+          // Turbulent sideways jitter in air (reduced since we have lateral flow above)
+          if (Math.random() < params.turbulence * 0.02) {
             const sx = x + (Math.random() < rightBias ? 1 : -1);
             if (sx >= 0 && sx < W) {
               const j = idx(sx, y);
