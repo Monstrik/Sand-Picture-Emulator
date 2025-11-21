@@ -76,7 +76,8 @@
             <label>Sand B color <span><input id="sandColorB" type="color" value="#9a7745"/></span></label>
           </div>
           <div class="control">
-            <label>Liquid % <span id="liquidVal">60</span></label>
+            <label>Water % <span id="waterVal">60</span></label>
+            <input id="water" type="range" min="0" max="90" value="60"/>
           </div>
           <div class="control">
             <label>Air % <span id="airVal">15</span></label>
@@ -139,7 +140,8 @@
   const canvas = $('sand-canvas');
   const sandRange = $('sand');
   const airRange = $('air');
-  const liquidVal = $('liquidVal');
+  const waterRange = $('water');
+  const waterVal = $('waterVal');
   const sandColorInputA = $('sandColorA');
   const sandColorInputB = $('sandColorB');
   const viscosityRange = $('viscosity');
@@ -156,7 +158,7 @@
   const speedRange = $('speed');
 
   const sandVal = $('sandVal');
-  // Liquid percentage is fixed at 60 and displayed via liquidVal
+  // Water and Air define composition; Sand is derived
   const airVal = $('airVal');
   const speedVal = $('speedVal');
   const viscVal = $('viscVal');
@@ -165,9 +167,10 @@
   const turbVal = $('turbVal');
   const densVal = $('densVal');
 
-  // Sand is derived from liquid(60%) and air (10–20%), so only air is adjustable
+  // Sand is derived from water and air; air constrained (10–20)
   sandRange.addEventListener('input', () => updatePercents('sand'));
   airRange.addEventListener('input', () => updatePercents('air'));
+  if (waterRange) waterRange.addEventListener('input', () => updatePercents('water'));
   speedRange.addEventListener('input', () => { speedVal.textContent = speedRange.value + 'x'; });
   viscosityRange.addEventListener('input', () => { viscVal.textContent = Number(viscosityRange.value).toFixed(2); });
   surfaceTensionRange.addEventListener('input', () => { stVal.textContent = Number(surfaceTensionRange.value).toFixed(2); });
@@ -190,13 +193,14 @@
   }
 
   function randomizeSettings() {
-    // Liquid is fixed at 60%; Air in [10..20]; Sand = 100 - (liquid + air)
-    const liquid = 60;
+    // Randomize water and air within sensible bounds; Sand derived
+    const w = randInt(40, 80);
     const a = randInt(10, 20);
-    const s = Math.max(0, 100 - (liquid + a));
+    const s = Math.max(0, 100 - (w + a));
+    if (waterRange) waterRange.value = String(Math.min(w, 100 - a));
     airRange.value = String(a);
     sandRange.value = String(s);
-    if (liquidVal) liquidVal.textContent = String(liquid);
+    if (waterVal) waterVal.textContent = waterRange?.value || '60';
     sandVal.textContent = sandRange.value;
     airVal.textContent = airRange.value;
 
@@ -225,15 +229,20 @@
   }
 
   function updatePercents(changed) {
-    // Composition: Liquid fixed at 60; Air constrained to [10..20]; Sand = 40 - Air
-    const liquid = 60;
+    // Composition: Water adjustable; Air constrained to [10..20]; Sand = 100 - (Water + Air)
+    let water = parseInt(waterRange?.value || '60', 10);
+    if (isNaN(water)) water = 60;
     let air = parseInt(airRange.value, 10);
     if (isNaN(air)) air = 15;
     air = Math.max(10, Math.min(20, air));
-    const sand = Math.max(0, 100 - (liquid + air)); // should be 40 - air
+    // ensure water does not exceed remaining capacity after air
+    const maxWater = 100 - air;
+    water = Math.max(0, Math.min(maxWater, water));
+    const sand = Math.max(0, 100 - (water + air));
+    if (waterRange) waterRange.value = String(water);
     sandRange.value = String(sand);
     airRange.value = String(air);
-    if (liquidVal) liquidVal.textContent = String(liquid);
+    if (waterVal) waterVal.textContent = String(water);
     sandVal.textContent = sandRange.value;
     airVal.textContent = airRange.value;
   }
@@ -283,7 +292,8 @@
     H = Math.max(16, Math.min(1024, parseInt(worldH.value || '384', 10)));
     canvas.width = W;
     canvas.height = H;
-    ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: false });
+    // Enable per-pixel alpha so water transparency is visible
+    ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: false });
     imgData = ctx.createImageData(W, H);
   }
 
@@ -303,9 +313,9 @@
     params.tiltDeg = parseFloat(tiltRange.value || '0') || 0;
     params.turbulence = parseFloat(turbulenceRange.value || '0.25') || 0;
     params.densityLevels = Math.max(1, Math.min(5, parseInt(densityLevelsRange.value || '3', 10)));
-    const pLiquid = 0.60;
+    const pWater = Math.max(0, Math.min(1, (parseInt(waterRange?.value || '60', 10) / 100)));
     const pAir = Math.max(0, Math.min(1, parseInt(airRange.value, 10) / 100));
-    const pSand = Math.max(0, 1 - (pLiquid + pAir));
+    const pSand = Math.max(0, 1 - (pWater + pAir));
 
     const rnd = Math.random;
     for (let y = 0; y < H; y++) {
@@ -313,8 +323,8 @@
         let r = rnd();
         if (randomize) r = rnd();
         let t;
-        if (r < pLiquid) t = TYPE.WATER;
-        else if (r < pLiquid + pAir) t = TYPE.AIR;
+        if (r < pWater) t = TYPE.WATER;
+        else if (r < pWater + pAir) t = TYPE.AIR;
         else t = (Math.random() < 0.5 ? TYPE.SAND_A : TYPE.SAND_B);
         let color = 0;
         let density = 0;
@@ -530,8 +540,8 @@
         // Render air as dark background, not bright red
         data[p++] = 17; data[p++] = 17; data[p++] = 17; data[p++] = 255;
       } else if (t === TYPE.WATER) {
-        // Render liquid as cool blue
-        data[p++] = 58; data[p++] = 112; data[p++] = 168; data[p++] = 255;
+        // Render water as cool blue at 50% transparency
+        data[p++] = 58; data[p++] = 112; data[p++] = 168; data[p++] = 128;
       } else if (t === TYPE.SAND_A) {
         const c = paletteA[0] || [200, 180, 90];
         // Slight darkening with density to hint heavier grains
