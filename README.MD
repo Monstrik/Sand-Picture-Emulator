@@ -1,12 +1,14 @@
 
-# Sand Picture Emulator!!
+# Mini Games — Landing + Sand Picture Emulator
 
-An interactive browser-based simulation inspired by kinetic sand art frames. It simulates grains of sand and air in a 2D grid and renders the evolving picture on an HTML canvas. You can tweak physical-like parameters, paint materials, and watch dunes form as the world settles.
+This repository now hosts a tiny landing page with links to multiple mini games:
 
+- Sand Picture Emulator (moved into `sand-picture/`)
+- Arrow Game (new folder scaffolded; coming soon)
 
-This project is self‑contained: just open index.html in a modern browser, or run it with npm to start a local server that opens your browser automatically.
+It’s self-contained: open `index.html` in a modern browser, or run it with npm to start a local server that opens your browser automatically.
 
-## Features
+## Sand Picture — Features
 
 - Sand and air cellular simulation with falling and sliding behavior
   - Air pockets coalesce into larger bubbles that resist intrusion and slow sand falling
@@ -24,13 +26,16 @@ This project is self‑contained: just open index.html in a modern browser, or r
    - Install Node.js 14+.
    - Run: npm start
    - Your default browser will open at http://localhost:5173/ (or another free port).
+   - From the landing page you can choose:
+     - Sand Picture Emulator: http://localhost:5173/sand-picture/
+     - Arrow Game (placeholder): http://localhost:5173/arrow-game/
 3. Option B — open file directly:
-   - Open index.html in a modern desktop browser (Chrome, Edge, Firefox, Safari).
+   - Open `index.html` in a modern desktop browser (Chrome, Edge, Firefox, Safari) to see the landing page and links.
    - Tip: If your browser blocks local file script access, serve the folder with a simple local server (e.g., Python: `python3 -m http.server` and open http://localhost:8000/).
 
 No build step or dependencies are required.
 
-## Controls (left panel)
+## Sand Picture — Controls (left panel)
 
 - Sand A color / Sand B color
   - Pick base colors for the two sand types. They fall and flow differently, producing layered patterns.
@@ -65,7 +70,7 @@ No build step or dependencies are required.
   - Pause: Toggle pause/resume.
   - Flip: Animate the canvas with a 180° rotation around the X‑axis (vertical flip). Click again to flip back. When flipped, the simulation’s gravity is inverted: sand moves toward the new “down,” and air rises toward the new “up.”
 
-## Canvas Interaction and Shortcuts
+## Sand Picture — Canvas Interaction and Shortcuts
 
 - Painting: Click and drag on the canvas to paint the selected material.
 - Shortcuts (while the page is focused):
@@ -77,7 +82,7 @@ No build step or dependencies are required.
 
 Brush size is smaller for sand to give a finer grain look, and larger for air to quickly sculpt the scene.
 
-## How it works (brief)
+## Sand Picture — How it works (brief)
 
 The simulation runs on an integer grid updated from bottom to top each step. Each cell stores:
 - Type: Air, Sand A, Sand B
@@ -86,7 +91,7 @@ The simulation runs on an integer grid updated from bottom to top each step. Eac
 
 Rendering writes pixels directly with ImageData for performance. Air is rendered in limegreen on a dark background for high visibility. Air pockets tend to merge into bubbles, and these bubbles resist sand entry, slowing the overall settling. Sand colors are slightly darkened by density to suggest weight.
 
-## Performance Tips
+## Sand Picture — Performance Tips
 
 - Prefer moderate world sizes (e.g., 512×384) for smooth real-time updates.
 - Increase Simulation speed for faster settling when paused is off.
@@ -98,10 +103,14 @@ Tested in current versions of Chromium-based browsers and Firefox. Safari should
 
 ## Development
 
-This is a single-file web app:
-- index.html: bootstraps the app and loads index.js
-- index.js: injects UI, runs the simulation, and renders to canvas
-- package.json: metadata (no build dependencies)
+Project structure of interest:
+- `index.html`: landing page with links to each mini game
+- `sand-picture/index.html`: Sand Picture app entry
+- `sand-picture/index.js`: Sand Picture simulation and UI
+- `arrow-game/index.html`: Arrow Game placeholder entry
+- `arrow-game/index.js`: Arrow key input indicator (placeholder logic)
+- `server.js`: tiny static server for local development
+- `package.json`: metadata (no build dependencies)
 
 You can serve locally if desired:
 
@@ -113,12 +122,14 @@ Node (npx):
 
 Then visit:
   http://localhost:8000/
+  - Sand Picture: http://localhost:8000/sand-picture/
+  - Arrow Game:  http://localhost:8000/arrow-game/
 
 Or simply use:
 
 npm start
 
-which launches a tiny built-in static server (server.js) and opens your browser automatically.
+which launches a tiny built-in static server (`server.js`) and opens your browser automatically.
 
 ## License
 

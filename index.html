@@ -3,11 +3,42 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Sand Picture Emulator</title>
+    <title>Mini Games</title>
     <meta name="color-scheme" content="light dark">
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+      header { padding: 24px; text-align: center; border-bottom: 1px solid #ddd; }
+      @media (prefers-color-scheme: dark) { header { border-color: #2a2a2a; } }
+      h1 { margin: 0; font-size: 24px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; padding: 24px; }
+      .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; text-decoration: none; color: inherit; display: block; }
+      .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+      @media (prefers-color-scheme: dark) { .card { border-color: #2a2a2a; } }
+      .card h2 { margin: 0 0 8px; font-size: 18px; }
+      .card p { margin: 0; color: #555; }
+      @media (prefers-color-scheme: dark) { .card p { color: #bbb; } }
+      footer { text-align: center; padding: 16px; color: #777; }
+      @media (prefers-color-scheme: dark) { footer { color: #999; } }
+    </style>
   </head>
   <body>
-    <!-- index.js will inject the UI and canvas if not present -->
-    <script src="./index.js"></script>
+    <header>
+      <h1>Mini Games</h1>
+      <p>Select a game to play</p>
+    </header>
+    <main class="grid">
+      <a class="card" href="./sand-picture/" aria-label="Open Sand Picture Emulator">
+        <h2>Sand Picture Emulator</h2>
+        <p>Interactive kinetic sand art simulation with physics-like controls.</p>
+      </a>
+      <a class="card" href="./arrow-game/" aria-label="Open Arrow Game">
+        <h2>Arrow Game</h2>
+        <p>Coming soon — a quick reflex game using arrow keys.</p>
+      </a>
+    </main>
+    <footer>
+      Served locally via npm start • Root index is a simple landing page.
+    </footer>
   </body>
   </html>

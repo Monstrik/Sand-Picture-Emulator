@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Arrow Game</title>
+    <meta name="color-scheme" content="light dark">
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; display: grid; place-items: center; min-height: 100vh; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+      .wrap { text-align: center; padding: 24px; border: 1px solid #ddd; border-radius: 12px; }
+      @media (prefers-color-scheme: dark) { .wrap { border-color: #2a2a2a; } }
+      h1 { margin: 0 0 12px; font-size: 22px; }
+      p { margin: 0 0 12px; color: #666; }
+      @media (prefers-color-scheme: dark) { p { color: #aaa; } }
+      a { color: #0d6efd; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Arrow Game</h1>
+      <p>Coming soon. Press arrow keys to test the input indicator below.</p>
+      <p id="indicator">Last key: none</p>
+      <p><a href="../">Back to landing page</a></p>
+    </div>
+    <script src="./index.js"></script>
+  </body>
+  </html>
